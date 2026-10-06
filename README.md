@@ -8,7 +8,7 @@ Hosted Review's invocation, authority roles, failure contract, provenance and do
 
 ## Human-first evidence generation
 
-The root Summary distribution repairs F-01 (shoal-app#72), source commit `e2573b64fec5c3a1714cc4a319068a70926e0224`, tree `ea81c324c05a79b31e284c1afec34166b17bf9a7`. Its package manifest SHA-256 is `937e24e711db482836dafc0de1d58c8374fffa94d4d9f7bb4e980d0ed60a97c2`. Canonical evidence format 1 keeps Protocol 1 / Summary Schema 2 and existing S/R/Q/I/P/C semantics. Identifiable invalid canonical result envelopes increment I once on closed canonical threads without becoming valid judgments or completing work. Hosted Review retains its independently recorded source. The immutable verified root Action commit is the shoal-station#26 Stage A handoff.
+The root Summary distribution repairs F-02 (shoal-app#75), source commit `066da7319d9766cdc79602a52696070d7ddc550d`, tree `9cf540ce27630d30b691f91fb1ecda8d78a633d8`. Its package manifest SHA-256 is `e13e8399392bf386af15f79e0f9d72d8b8e4883f2c75f89a25a01cecd8e48f7a`. Canonical evidence format 1 keeps Protocol 1 / Summary Schema 2 and existing S/R/Q/I/P/C semantics. Identifiable invalid canonical result envelopes, including damaged/truncated machine JSON, increment I once on closed canonical threads without becoming valid judgments or completing work. Recoverable direct Initial REVIEWED identity preserves prior-initial lifecycle evidence. Hosted Review retains its independently recorded source. The immutable verified root Action commit is the shoal-station#26 Stage A handoff.
 
 ## Usage
 
@@ -129,9 +129,9 @@ These commands use only read-only public GitHub API requests (optional `GITHUB_T
 
 ## Hosted minimum sufficient evidence
 
-The Hosted adapter distributes `gh-shoal` v0.11.1 from commit
-`257d957d72e8457ed2adbd5d5e02d686885d19dd`, tree
-`c27b0dba2d282c6c55bef1f1894d85144241d0ae`. Its integrity inventory is
+The Hosted adapter distributes `gh-shoal` v0.11.2 from commit
+`d7e0e1fb7efdd8923ed46a493147299d8e629f0f`, tree
+`0af19296794f8c1d523120ea3d7e4bb9f069fba9`. Its integrity inventory is
 `hosted-source-package.json`. Admission and review comments use the shared
 human-first evidence envelope: visible prose is presentation, while the single
 versioned machine record remains authoritative. Malformed formal envelopes
