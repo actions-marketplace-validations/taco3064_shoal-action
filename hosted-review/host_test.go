@@ -41,7 +41,7 @@ type fixture struct {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	f := &fixture{t: t, state: "open", head: basis, policy: "Return PASS if the Target README contains READY. Otherwise return FAIL. Explain the decisive repository evidence.", comments: []map[string]any{}, managed: map[string]string{}}
-	for _, name := range []string{"review-request.yml", "reviewer-summary-current.yml"} {
+	for _, name := range []string{"review-request.yml", "reviewer-summary-human-first.yml"} {
 		b, e := os.ReadFile("testdata/" + name)
 		if e != nil {
 			t.Fatal(e)
@@ -145,6 +145,8 @@ func (f *fixture) api(r *http.Request) (*http.Response, error) {
 		return response(200, repo(12, "alice/shoal-station", requester, true))
 	case p == "repos/alice/project" || p == "repositories/55":
 		return response(200, target)
+	case strings.HasSuffix(p, "/check-runs"):
+		return response(200, map[string]any{"total_count": 0, "check_runs": []any{}})
 	case p == "repos/alice/project/issues" || p == "repos/alice/project/pulls":
 		if r.URL.Query().Get("state") != "all" {
 			f.t.Fatal("history must include closed Issues and PRs")
@@ -307,6 +309,8 @@ func TestHistorySelectsRecentClosedAndMergedEvidence(t *testing.T) {
 		switch r.URL.Path {
 		case "/repos/alice/project":
 			body = `{"id":55,"full_name":"alice/project","fork":false,"archived":false}`
+		case "/repos/alice/project/commits/" + basis + "/check-runs":
+			body = `{"total_count":0,"check_runs":[]}`
 		case "/repos/alice/project/issues":
 			if r.URL.Query().Get("state") != "all" {
 				t.Fatal("open-only issue history")
@@ -577,6 +581,61 @@ func TestTransportDecodingNeverUsesFailureJudgment(t *testing.T) {
 	}
 	if got := ClassifyFailure("unexpected process failure"); got != "COPILOT_PROCESS_FAILURE" {
 		t.Fatal(got)
+	}
+}
+
+func TestRedactedInputEchoCannotBreakSemanticDecoding(t *testing.T) {
+	echo := `{"type":"user.message","data":{"content":"Authorization: ******" broken echo"}}` + "\n"
+	final := `{"type":"assistant.message","data":{"phase":"final_answer","content":"{\"evidenceRequests\":[{\"issue\":27,\"ref\":\"history:0:0\"}]}"}}` + "\n"
+	completed := `{"type":"result","exitCode":0}`
+	result, code := DecodeEvents([]byte(echo + final + completed))
+	if code != "" || !json.Valid(result) || !strings.Contains(string(result), "evidenceRequests") {
+		t.Fatalf("redacted echo blocked valid request: %s %s", code, result)
+	}
+	for _, broken := range []string{
+		`{"type":"assistant.message","data":{"phase":"final_answer","content":"bad" broken"}}`,
+		`{"type":"tool.execution_start","data":{}}`,
+		`{"type":"unknown","data":"broken" nope}`,
+	} {
+		if result, code := DecodeEvents([]byte(echo + broken + "\n" + final + completed)); code == "" || result != nil {
+			t.Fatal("non-echo error or tool event bypassed validation")
+		}
+	}
+}
+
+func TestPinnedChecksAndForkComparison(t *testing.T) {
+	for _, wrongHead := range []bool{false, true} {
+		reads := reviewruntime.GitHubFunc(func(_ context.Context, r reviewruntime.Request) ([]byte, error) {
+			switch {
+			case strings.HasSuffix(r.Endpoint, "/check-runs?per_page=100"):
+				head := basis
+				if wrongHead {
+					head = changed
+				}
+				return []byte(fmt.Sprintf(`{"total_count":1,"check_runs":[{"name":"verify","head_sha":"%s","conclusion":"success"}]}`, head)), nil
+			case r.Endpoint == "repos/upstream/project/git/ref/heads/main":
+				return []byte(`{"object":{"sha":"` + changed + `"}}`), nil
+			case r.Endpoint == "repos/upstream/project/compare/"+changed+"...alice:"+basis+"?per_page=20":
+				return []byte(`{"base_commit":{"sha":"` + changed + `"},"merge_base_commit":{"sha":"` + changed + `"},"status":"ahead","ahead_by":1,"total_commits":1,"commits":[{"sha":"` + basis + `"}],"files":[{"filename":".github/workflows/review.yml","status":"modified","changes":2,"patch":"@@ pin update"}]}`), nil
+			}
+			t.Fatalf("unscoped verification read: %s", r.Endpoint)
+			return nil, nil
+		})
+		repository := map[string]json.RawMessage{"fork": json.RawMessage(`true`), "parent": json.RawMessage(`{"full_name":"upstream/project","default_branch":"main"}`)}
+		result, err := collectVerification(context.Background(), reads, "alice/project", basis, repository)
+		if wrongHead {
+			if err == nil {
+				t.Fatal("accepted checks for wrong commit")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, _ := json.Marshal(result)
+		if !strings.Contains(string(encoded), "@@ pin update") || !strings.Contains(string(encoded), `"checksComplete":true`) {
+			t.Fatalf("missing targeted evidence: %s", encoded)
+		}
 	}
 }
 func TestOutcomeNeverContainsCredentials(t *testing.T) {
